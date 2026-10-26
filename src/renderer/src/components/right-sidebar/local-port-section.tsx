@@ -14,7 +14,8 @@ export function LocalPortSection({
   onStopPort,
   onShowDetails,
   onOpenInBrowser,
-  onOpenLogs
+  onOpenLogs,
+  onConfigureServer
 }: {
   id: string
   title: string
@@ -22,6 +23,7 @@ export function LocalPortSection({
   emptyText?: string
   collapsed: boolean
   onToggle: () => void
+  onConfigureServer?: (port: WorkspacePort & { kind: 'workspace' }) => void
   onOpenLogs?: (port: WorkspacePort) => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
@@ -62,6 +64,7 @@ export function LocalPortSection({
                   onShowDetails={onShowDetails}
                   onOpenInBrowser={onOpenInBrowser}
                   onOpenLogs={onOpenLogs}
+                  onConfigureServer={onConfigureServer}
                 />
               ))
             : emptyText && <div className="py-1 text-xs text-muted-foreground">{emptyText}</div>}

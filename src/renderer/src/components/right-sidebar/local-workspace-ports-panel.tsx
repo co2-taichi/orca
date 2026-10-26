@@ -1,3 +1,6 @@
+import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { WorkspaceServerLaunchDialog } from './workspace-server-launch-dialog'
+import { WorkspaceServerLaunchList } from './workspace-server-launch-list'
 import { openWorkspacePortLogs } from '@/lib/workspace-port-logs'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
@@ -49,6 +52,23 @@ export function LocalWorkspacePortsPanel({
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
+  const executionHostId = getKnownExecutionHostIdForWorktree(
+    useAppStore.getState(),
+    activeWorktree?.id
+  )
+  const [configureContext, setConfigureContext] = useState<{
+    port: WorkspacePort & { kind: 'workspace' }
+    runtimeTarget: RuntimeClientTarget
+    executionHostId: string
+  } | null>(null)
+  const handleConfigureServer = useCallback(
+    (port: WorkspacePort & { kind: 'workspace' }) => {
+      if (runtimeTarget && executionHostId && port.owner.worktreeId === activeWorktree?.id) {
+        setConfigureContext({ port, runtimeTarget, executionHostId })
+      }
+    },
+    [runtimeTarget, executionHostId, activeWorktree?.id]
+  )
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     other: true,
@@ -260,6 +280,25 @@ export function LocalWorkspacePortsPanel({
         </div>
       )}
 
+      {activeWorktree && runtimeTarget && executionHostId && (
+        <WorkspaceServerLaunchList
+          worktreeId={activeWorktree.id}
+          runtimeTarget={runtimeTarget}
+          executionHostId={executionHostId}
+          scan={displayScan}
+          onConfigure={handleConfigureServer}
+          onRefresh={refresh}
+        />
+      )}
+      {configureContext && (
+        <WorkspaceServerLaunchDialog
+          key={configureContext.port.id}
+          port={configureContext.port}
+          runtimeTarget={configureContext.runtimeTarget}
+          executionHostId={configureContext.executionHostId}
+          onClose={() => setConfigureContext(null)}
+        />
+      )}
       {showPortSections && (
         <>
           <LocalPortSection
@@ -269,6 +308,7 @@ export function LocalWorkspacePortsPanel({
               'Active Workspace'
             )}
             ports={activePorts}
+            onConfigureServer={handleConfigureServer}
             emptyText={
               refreshing && !displayScan
                 ? translate('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')

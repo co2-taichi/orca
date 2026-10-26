@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Box, Copy, ExternalLink, Info, Server, Square, ScrollText } from 'lucide-react'
+import { Box, Copy, ExternalLink, Info, Server, Square, ScrollText, Settings2 } from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import { Button } from '@/components/ui/button'
@@ -26,9 +26,11 @@ export function LocalPortRow({
   onStop,
   onShowDetails,
   onOpenInBrowser,
-  onOpenLogs
+  onOpenLogs,
+  onConfigureServer
 }: {
   port: WorkspacePort
+  onConfigureServer?: (port: WorkspacePort & { kind: 'workspace' }) => void
   onOpenLogs?: (port: WorkspacePort) => void
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
@@ -179,6 +181,31 @@ export function LocalPortRow({
                 )}
               </TooltipContent>
             </Tooltip>
+            {onConfigureServer && port.kind === 'workspace' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.right.sidebar.index.configureServerCommand',
+                      'Configure Startup Command'
+                    )}
+                    onClick={() => onConfigureServer(port)}
+                  >
+                    <Settings2 size={13} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {translate(
+                    'auto.components.right.sidebar.index.configureServerCommand',
+                    'Configure Startup Command'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {canOpenLogs && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -269,6 +296,18 @@ export function LocalPortRow({
           <ScrollText size={13} />
           {canOpenLogs ? logsLabel : noLogsLabel}
         </ContextMenuItem>
+        {onConfigureServer && port.kind === 'workspace' && (
+          <ContextMenuItem
+            className={LOCAL_PORT_MENU_ITEM_CLASS}
+            onSelect={() => onConfigureServer(port)}
+          >
+            <Settings2 size={13} />
+            {translate(
+              'auto.components.right.sidebar.index.configureServerCommand',
+              'Configure Startup Command'
+            )}
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
