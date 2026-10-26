@@ -17,6 +17,8 @@ const badgeVariants = cva(
         outline:
           'border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: '[a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
+        workspacePort:
+          'h-4 border-border px-1 py-0 font-mono text-3xs tabular-nums text-muted-foreground [button&]:hover:bg-sidebar-accent [button&]:hover:text-sidebar-accent-foreground',
         link: 'text-primary underline-offset-4 [a&]:hover:underline',
         /** Workspace execution-host context, quieter and squarer than status chips. */
         hostContext:

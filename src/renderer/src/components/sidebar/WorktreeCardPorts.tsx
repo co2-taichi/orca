@@ -26,33 +26,7 @@ type WorktreeCardPortsProps = {
   ports: WorkspacePort[]
 }
 
-export function WorktreeCardPortsTrigger({
-  ports
-}: WorktreeCardPortsProps): React.JSX.Element | null {
-  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-
-  if (ports.length === 0) {
-    return null
-  }
-
-  return (
-    <button
-      type="button"
-      className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-label={translate(
-        'auto.components.sidebar.WorktreeCardPorts.fed49903c9',
-        '{{value0}} live {{value1}}',
-        { value0: ports.length, value1: ports.length === 1 ? 'port' : 'ports' }
-      )}
-      onClick={(event) => {
-        event.stopPropagation()
-        recordFeatureInteraction('ports')
-      }}
-    >
-      <Plug className="size-3.5" />
-    </button>
-  )
-}
+export { WorktreeCardPortsTrigger } from './WorktreeCardPortBadges'
 
 function PortAction({
   label,
