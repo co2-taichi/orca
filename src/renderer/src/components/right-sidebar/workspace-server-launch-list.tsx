@@ -13,11 +13,11 @@ import {
   type WorkspaceServerLaunch
 } from '@/lib/workspace-server-launches'
 import { useWorkspaceServerProcesses } from '@/lib/workspace-server-processes'
-import { WorkspaceServerLogPanel } from './workspace-server-log-panel'
+import { WorkspaceServerLogViews } from './workspace-server-log-views'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
-export function WorkspaceServerLaunchList({
+function WorkspaceServerLaunchListForScope({
   worktreeId,
   runtimeTarget,
   executionHostId,
@@ -80,7 +80,6 @@ export function WorkspaceServerLaunchList({
   if (!entries.length) {
     return null
   }
-  const selectedEntry = entries.find((entry) => entry.id === selected)
   return (
     <>
       <section
@@ -244,13 +243,28 @@ export function WorkspaceServerLaunchList({
           )
         })}
       </section>
-      {selectedEntry && (
-        <WorkspaceServerLogPanel
-          name={selectedEntry.name}
-          run={stream.runs.find((run) => run.port === selectedEntry.port)}
+      {selected && (
+        <WorkspaceServerLogViews
+          entries={entries}
+          runs={stream.runs}
+          selected={selected}
+          onSelect={setSelected}
           onClose={() => setSelected(null)}
         />
       )}
     </>
   )
+}
+
+export function WorkspaceServerLaunchList(
+  props: React.ComponentProps<typeof WorkspaceServerLaunchListForScope>
+): React.JSX.Element {
+  const { runtimeTarget, executionHostId, worktreeId } = props
+  const scope = JSON.stringify([
+    runtimeTarget.kind,
+    runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null,
+    executionHostId,
+    worktreeId
+  ])
+  return <WorkspaceServerLaunchListForScope key={scope} {...props} />
 }

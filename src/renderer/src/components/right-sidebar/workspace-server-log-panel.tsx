@@ -9,11 +9,15 @@ import type { WorkspaceServerSnapshot } from '../../../../shared/workspace-serve
 export function WorkspaceServerLogPanel({
   name,
   run,
-  onClose
+  onClose,
+  visible = true,
+  className
 }: {
   name: string
   run?: WorkspaceServerSnapshot
   onClose: () => void
+  visible?: boolean
+  className?: string
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   const errorRef = useRef<HTMLDivElement>(null)
@@ -23,20 +27,23 @@ export function WorkspaceServerLogPanel({
     follow.current = true
   }, [name, run?.id])
   useEffect(() => {
-    if (follow.current && scrollRef.current) {
+    if (visible && follow.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-  }, [run?.logs])
+  }, [run?.logs, visible])
   return (
     <section
-      className="mx-3 my-2 min-w-0 overflow-hidden rounded-md border border-border"
+      className={cn(
+        'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-border',
+        className
+      )}
       aria-label={translate(
         'auto.components.right.sidebar.index.serverLogsTitle',
         '{{name}} Logs',
         { name }
       )}
     >
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1">
+      <div className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
         <span className="min-w-0 flex-1 truncate text-xs font-medium">
           {translate('auto.components.right.sidebar.index.serverLogsTitle', '{{name}} Logs', {
             name
@@ -116,10 +123,10 @@ export function WorkspaceServerLogPanel({
       </div>
       <div
         ref={scrollRef}
-        className="max-h-80 min-h-32 overflow-auto p-2 font-mono text-xs scrollbar-sleek"
+        className="min-h-0 flex-1 overflow-auto p-2 font-mono text-xs scrollbar-sleek"
         onScroll={() => {
           const el = scrollRef.current
-          if (el) {
+          if (visible && el) {
             follow.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
           }
         }}
@@ -154,7 +161,7 @@ export function WorkspaceServerLogPanel({
           </p>
         )}
       </div>
-      <p className="border-t border-border px-2 py-1 text-3xs text-muted-foreground">
+      <p className="shrink-0 border-t border-border px-2 py-1 text-3xs text-muted-foreground">
         {translate(
           'auto.components.right.sidebar.index.serverLogLimit',
           'Showing up to 500 recent lines. Errors are highlighted in red.'
