@@ -205,7 +205,7 @@ export function LocalWorkspacePortsPanel({
     <div className="flex flex-col h-full overflow-y-auto scrollbar-sleek">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {translate('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
+          {translate('auto.components.right.sidebar.index.servers', 'Servers')}
         </span>
         <Tooltip>
           <TooltipTrigger asChild>

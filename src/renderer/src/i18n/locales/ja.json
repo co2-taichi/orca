@@ -14008,7 +14008,8 @@
             "fc3095d2ed": "エクスプローラ",
             "aiVaultSessionHistory": "Agent",
             "folderWorkspaces": "添付ワークツリー",
-            "parentPrChecks": "PR チェック"
+            "parentPrChecks": "PR チェック",
+            "servers": "サーバー"
           },
           "right": {
             "panel": {

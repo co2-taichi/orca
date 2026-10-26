@@ -37,7 +37,7 @@ const items: ActivityBarItem[] = [
 ]
 
 describe('getVisibleRightSidebarActivityItems', () => {
-  it('shows ports only for workspaces on an SSH host', () => {
+  it('respects explicit SSH-only visibility flags', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
         isFolder: false,
