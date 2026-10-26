@@ -1,3 +1,6 @@
+import { realpath } from 'node:fs/promises'
+import { WorkspaceServerProcessManager } from '../../servers/workspace-server-process-manager'
+import { prepareWorkspaceServerCommand } from '../../servers/workspace-server-command'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
 import { DEFAULT_WORKTREE_LIST_LIMIT } from '../orca-runtime-postlude'
@@ -164,6 +167,57 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     worktreeSelector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
     return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+  }
+
+  readonly workspaceServers = new WorkspaceServerProcessManager()
+
+  async resolveWorkspaceServerScope(worktree: string, expectedHost: string) {
+    const target = await this.resolveRuntimeFileTarget(worktree)
+    if (target.executionHostId !== expectedHost || target.executionHostId !== 'local') {
+      throw new Error(
+        'Managed servers require the workspace host runtime. Direct SSH requires a paired Orca host.'
+      )
+    }
+    const scope = await this.showTerminalWorkspaceLaunchScope(worktree)
+    if (scope.connectionId) {
+      throw new Error('Use the paired runtime to manage this server.')
+    }
+    return scope
+  }
+
+  async startManagedWorkspaceServer(args: {
+    worktree: string
+    executionHostId: string
+    port: number
+    name: string
+    command: string
+    cwd: string
+  }) {
+    const scope = await this.resolveWorkspaceServerScope(args.worktree, args.executionHostId)
+    const prepared = await prepareWorkspaceServerCommand({
+      rootPath: scope.path,
+      cwd: args.cwd,
+      command: args.command,
+      settings: this.store?.getSettings()
+    })
+    const scan = await this.scanWorkspacePorts()
+    if (scan.unavailableReason) {
+      throw new Error(scan.unavailableReason)
+    }
+    if (scan.ports.some((port) => port.port === args.port)) {
+      throw new Error(`Port ${args.port} is already in use.`)
+    }
+    const confirmedScope = await this.resolveWorkspaceServerScope(
+      args.worktree,
+      args.executionHostId
+    )
+    if ((await realpath(confirmedScope.path)) !== prepared.root) {
+      throw new Error('The workspace changed while starting the server.')
+    }
+    return this.workspaceServers.start(
+      { worktreeId: scope.id, port: args.port, name: args.name },
+      prepared.spec
+    )
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

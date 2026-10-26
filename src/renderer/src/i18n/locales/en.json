@@ -14401,7 +14401,7 @@
             "serverLogsUnavailable": "No source terminal available",
             "configureServerCommand": "Configure Startup Command",
             "serverCommand": "Server Startup Command",
-            "serverCommandDescription": "Save a command to start this server from Servers after it stops. It runs in a new terminal on this workspace’s host.",
+            "serverCommandDescription": "Save a command to run this server in the background. Its logs and errors appear in Servers.",
             "serverName": "Name",
             "serverCommandField": "Command",
             "serverDirectory": "Working Directory",
@@ -14420,7 +14420,23 @@
             "serverCheckStartupTerminal": "Check the existing startup terminal. Close it before trying again if startup failed.",
             "serverPortConflict": "Port {{port}} is already in use.",
             "serverWorkspaceUnavailable": "Could not open the workspace.",
-            "serverTerminalUnavailable": "Could not create the startup terminal."
+            "serverTerminalUnavailable": "Could not create the startup terminal.",
+            "serverHostUnsupported": "This Orca host does not support managed server logs. Update the host to use this feature.",
+            "serverHostDisconnected": "Server log connection lost. Reconnecting…",
+            "serverLogsTitle": "{{name}} Logs",
+            "jumpServerError": "Jump to Latest Error",
+            "copyServerLogs": "Copy Logs",
+            "closeServerLogs": "Close Logs",
+            "noServerLogsYet": "Waiting for server output…",
+            "externalServerLogs": "Logs from servers started elsewhere cannot be captured retroactively. Start this server from Servers to capture its logs here.",
+            "serverLogLimit": "Showing up to 500 recent lines. Errors are highlighted in red.",
+            "serverFailed": "Exited with Error",
+            "serverProcessError": "Server Error",
+            "serverStopping": "Stopping…",
+            "serverRunning": "Running",
+            "serverRunningElsewhere": "Started Elsewhere",
+            "serverLogErrors": "Errors: {{count}}",
+            "stopServer": "Stop Server"
           },
           "right": {
             "panel": {

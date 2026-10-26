@@ -14014,7 +14014,7 @@
             "serverLogsUnavailable": "起動元ターミナルがありません",
             "configureServerCommand": "起動コマンドを設定",
             "serverCommand": "サーバーの起動コマンド",
-            "serverCommandDescription": "停止後に Servers から起動するコマンドを登録します。このワークスペースの実行先で、新しいターミナルを開いて実行します。",
+            "serverCommandDescription": "バックグラウンドで実行する起動コマンドを登録します。ログとエラーは Servers 内で確認できます。",
             "serverName": "名前",
             "serverCommandField": "コマンド",
             "serverDirectory": "作業ディレクトリ",
@@ -14033,7 +14033,23 @@
             "serverCheckStartupTerminal": "起動用ターミナルを確認してください。起動に失敗した場合は、そのターミナルを閉じてから再試行してください。",
             "serverPortConflict": "ポート {{port}} は使用中です。",
             "serverWorkspaceUnavailable": "ワークスペースを開けませんでした。",
-            "serverTerminalUnavailable": "起動用ターミナルを作成できませんでした。"
+            "serverTerminalUnavailable": "起動用ターミナルを作成できませんでした。",
+            "serverHostUnsupported": "この実行先の Orca はサーバーログ管理に未対応です。実行先を更新してください。",
+            "serverHostDisconnected": "サーバーログの接続が切れました。再接続中…",
+            "serverLogsTitle": "{{name}} のログ",
+            "jumpServerError": "最新のエラーへ移動",
+            "copyServerLogs": "ログをコピー",
+            "closeServerLogs": "ログを閉じる",
+            "noServerLogsYet": "サーバーの出力を待っています…",
+            "externalServerLogs": "別の場所で起動されたサーバーの過去のログは取得できません。Servers から起動すると、ここでログを確認できます。",
+            "serverLogLimit": "最新 500 行まで表示します。エラー行は赤色で表示します。",
+            "serverFailed": "異常終了",
+            "serverProcessError": "サーバーエラー",
+            "serverStopping": "停止中…",
+            "serverRunning": "実行中",
+            "serverRunningElsewhere": "別の場所で起動中",
+            "serverLogErrors": "エラーログ {{count}} 件",
+            "stopServer": "サーバーを停止"
           },
           "right": {
             "panel": {

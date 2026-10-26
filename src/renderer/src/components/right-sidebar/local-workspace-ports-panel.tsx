@@ -1,7 +1,7 @@
+import { useWorkspaceServerLaunches } from '@/lib/workspace-server-launches'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { WorkspaceServerLaunchDialog } from './workspace-server-launch-dialog'
 import { WorkspaceServerLaunchList } from './workspace-server-launch-list'
-import { openWorkspacePortLogs } from '@/lib/workspace-port-logs'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
@@ -60,11 +60,12 @@ export function LocalWorkspacePortsPanel({
     port: WorkspacePort & { kind: 'workspace' }
     runtimeTarget: RuntimeClientTarget
     executionHostId: string
+    running: boolean
   } | null>(null)
   const handleConfigureServer = useCallback(
-    (port: WorkspacePort & { kind: 'workspace' }) => {
+    (port: WorkspacePort & { kind: 'workspace' }, running = false) => {
       if (runtimeTarget && executionHostId && port.owner.worktreeId === activeWorktree?.id) {
-        setConfigureContext({ port, runtimeTarget, executionHostId })
+        setConfigureContext({ port, runtimeTarget, executionHostId, running })
       }
     },
     [runtimeTarget, executionHostId, activeWorktree?.id]
@@ -197,23 +198,27 @@ export function LocalWorkspacePortsPanel({
     [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
   )
 
-  const handleOpenLogs = useCallback(
-    (port: WorkspacePort) => {
-      if (!openWorkspacePortLogs(port, runtimeTarget)) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.index.serverLogsUnavailable',
-            'No source terminal available'
-          )
-        )
-      }
-    },
-    [runtimeTarget]
-  )
-
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
     () => getLocalWorkspacePortSections(displayScan, activeRepoId, activeWorktree?.id),
     [activeRepoId, activeWorktree?.id, displayScan]
+  )
+
+  const serverLaunches = useWorkspaceServerLaunches()
+  const hasRegisteredActiveServers = serverLaunches.some(
+    (entry) => entry.worktreeId === activeWorktree?.id && entry.executionHostId === executionHostId
+  )
+  const detectedActivePorts = activePorts.filter(
+    (port) =>
+      !serverLaunches.some(
+        (entry) =>
+          entry.worktreeId === activeWorktree?.id &&
+          entry.executionHostId === executionHostId &&
+          entry.runtimeTarget.kind === runtimeTarget?.kind &&
+          entry.port === port.port &&
+          (entry.runtimeTarget.kind !== 'environment' ||
+            (runtimeTarget?.kind === 'environment' &&
+              entry.runtimeTarget.environmentId === runtimeTarget.environmentId))
+      )
   )
 
   const showPortSections = shouldShowLocalWorkspacePortSections(displayScan, {
@@ -280,7 +285,7 @@ export function LocalWorkspacePortsPanel({
         </div>
       )}
 
-      {activeWorktree && runtimeTarget && executionHostId && (
+      {isVisible && activeWorktree && runtimeTarget && executionHostId && (
         <WorkspaceServerLaunchList
           worktreeId={activeWorktree.id}
           runtimeTarget={runtimeTarget}
@@ -288,6 +293,7 @@ export function LocalWorkspacePortsPanel({
           scan={displayScan}
           onConfigure={handleConfigureServer}
           onRefresh={refresh}
+          onStopPort={handleStopPort}
         />
       )}
       {configureContext && (
@@ -296,6 +302,7 @@ export function LocalWorkspacePortsPanel({
           port={configureContext.port}
           runtimeTarget={configureContext.runtimeTarget}
           executionHostId={configureContext.executionHostId}
+          canRemove={!configureContext.running}
           onClose={() => setConfigureContext(null)}
         />
       )}
@@ -307,22 +314,23 @@ export function LocalWorkspacePortsPanel({
               'auto.components.right.sidebar.PortsPanel.935dda7718',
               'Active Workspace'
             )}
-            ports={activePorts}
+            ports={detectedActivePorts}
             onConfigureServer={handleConfigureServer}
             emptyText={
-              refreshing && !displayScan
-                ? translate('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
-                : translate(
-                    'auto.components.right.sidebar.PortsPanel.38b16cfbef',
-                    'No ports detected'
-                  )
+              hasRegisteredActiveServers
+                ? undefined
+                : refreshing && !displayScan
+                  ? translate('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
+                  : translate(
+                      'auto.components.right.sidebar.PortsPanel.38b16cfbef',
+                      'No ports detected'
+                    )
             }
             collapsed={collapsedSections.active ?? false}
             onToggle={() => toggleSection('active')}
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
-            onOpenLogs={handleOpenLogs}
           />
           <LocalPortSection
             id="other"
@@ -336,7 +344,6 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
-            onOpenLogs={handleOpenLogs}
           />
           <LocalPortSection
             id="external"
@@ -347,7 +354,6 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
-            onOpenLogs={handleOpenLogs}
           />
         </>
       )}

@@ -1,18 +1,12 @@
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorkspace } from './worktree-activation'
 import {
   getKnownExecutionHostIdForWorktree,
   runtimeEnvironmentIdOrLocalUnlessTwin
 } from './worktree-runtime-owner'
-import { scanWorkspacePortsForTarget } from './workspace-port-actions'
-import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import {
-  saveWorkspaceServerLaunch,
-  getWorkspaceServerLaunches,
-  type WorkspaceServerLaunch
-} from './workspace-server-launches'
+import { getWorkspaceServerLaunches, type WorkspaceServerLaunch } from './workspace-server-launches'
 
 const starting = new Set<string>()
 
@@ -51,98 +45,40 @@ export async function startWorkspaceServer(entry: WorkspaceServerLaunch): Promis
         )
       )
     }
-    if (
-      current.launchTabId &&
-      (!state.tabsByWorktree[entry.worktreeId] ||
-        state.tabsByWorktree[entry.worktreeId]?.some((tab) => tab.id === current.launchTabId))
-    ) {
-      throw new Error(
-        translate(
-          'auto.components.right.sidebar.index.serverCheckStartupTerminal',
-          'Check the existing startup terminal. Close it before trying again if startup failed.'
-        )
-      )
-    }
-    const scan = await scanWorkspacePortsForTarget(entry.runtimeTarget)
-    if (scan.unavailableReason) {
-      throw new Error(scan.unavailableReason)
-    }
-    if (scan.ports.some((port) => port.port === entry.port)) {
-      throw new Error(
-        translate(
-          'auto.components.right.sidebar.index.serverPortConflict',
-          'Port {{port}} is already in use.',
-          { port: entry.port }
-        )
-      )
-    }
-    const latestConfig = getWorkspaceServerLaunches().find((item) => item.id === entry.id)
-    if (!latestConfig || latestConfig.command !== entry.command || latestConfig.cwd !== entry.cwd) {
-      throw new Error(
-        translate(
-          'auto.components.right.sidebar.index.serverConfigChanged',
-          'The server configuration changed. Try again.'
-        )
-      )
-    }
-    const latest = useAppStore.getState()
-    if (
-      getKnownExecutionHostIdForWorktree(latest, entry.worktreeId) !== host ||
-      runtimeEnvironmentIdOrLocalUnlessTwin(latest, entry.worktreeId) !== environmentId
-    ) {
-      throw new Error(
-        translate(
-          'auto.components.right.sidebar.index.serverHostChanged',
-          'The workspace execution host changed. Configure this server again.'
-        )
-      )
-    }
-    if (
-      !activateAndRevealWorkspace(entry.worktreeId, {
-        executionHostId: host,
-        providesInitialSurface: true
-      })
-    ) {
-      throw new Error(
-        translate(
-          'auto.components.right.sidebar.index.serverWorkspaceUnavailable',
-          'Could not open the workspace.'
-        )
-      )
-    }
-    let tabId: string
-    if (entry.runtimeTarget.kind === 'environment') {
-      const created = await createWebRuntimeSessionTerminalResult({
-        worktreeId: entry.worktreeId,
-        environmentId: entry.runtimeTarget.environmentId,
-        command: entry.command,
-        cwd: entry.cwd,
-        activate: true,
-        viewMode: 'terminal'
-      })
-      if (created.outcome.status !== 'created' || !created.hostTabId) {
-        throw new Error(
-          created.outcome.status === 'failed'
-            ? created.outcome.message
-            : translate(
-                'auto.components.right.sidebar.index.serverTerminalUnavailable',
-                'Could not create the startup terminal.'
-              )
-        )
-      }
-      tabId = toWebTerminalSurfaceTabId(created.hostTabId)
-    } else {
-      const store = useAppStore.getState()
-      tabId = store.createTab(entry.worktreeId, undefined, undefined, {
-        pendingStartup: { command: entry.command },
-        startupCwd: entry.cwd,
-        quickCommandLabel: entry.name,
-        viewMode: 'terminal'
-      }).id
-      store.setActiveTabType('terminal', entry.worktreeId)
-    }
-    saveWorkspaceServerLaunch({ ...entry, launchTabId: tabId })
+    await callRuntimeRpc(entry.runtimeTarget, 'workspaceServers.start', {
+      worktree: toRuntimeWorktreeSelector(entry.worktreeId),
+      executionHostId: entry.runtimeTarget.kind === 'environment' ? 'local' : entry.executionHostId,
+      port: entry.port,
+      name: entry.name,
+      command: entry.command,
+      cwd: entry.cwd
+    })
   } finally {
     starting.delete(entry.id)
   }
+}
+
+export async function stopWorkspaceServer(
+  entry: WorkspaceServerLaunch,
+  runId: string
+): Promise<void> {
+  const state = useAppStore.getState()
+  if (
+    getKnownExecutionHostIdForWorktree(state, entry.worktreeId) !== entry.executionHostId ||
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, entry.worktreeId) !==
+      (entry.runtimeTarget.kind === 'environment' ? entry.runtimeTarget.environmentId : null)
+  ) {
+    throw new Error(
+      translate(
+        'auto.components.right.sidebar.index.serverHostChanged',
+        'The workspace execution host changed. Configure this server again.'
+      )
+    )
+  }
+  await callRuntimeRpc(entry.runtimeTarget, 'workspaceServers.stop', {
+    worktree: toRuntimeWorktreeSelector(entry.worktreeId),
+    port: entry.port,
+    runId,
+    executionHostId: entry.runtimeTarget.kind === 'environment' ? 'local' : entry.executionHostId
+  })
 }

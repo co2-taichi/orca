@@ -1,41 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceServerLaunch } from './workspace-server-launches'
-import { startWorkspaceServer } from './start-workspace-server'
+import { startWorkspaceServer, stopWorkspaceServer } from './start-workspace-server'
 
 const mocks = vi.hoisted(() => {
   const records: WorkspaceServerLaunch[] = []
-  const tabsByWorktree: Record<string, { id: string }[]> = {}
   return {
     records,
     host: vi.fn((): string | null => 'local'),
     environment: vi.fn((): string | null => null),
-    scan: vi.fn(),
-    activate: vi.fn(() => true),
-    save: vi.fn(),
-    remote: vi.fn(),
-    store: {
-      tabsByWorktree,
-      createTab: vi.fn(() => ({ id: 'new-tab' })),
-      setActiveTabType: vi.fn()
-    }
+    rpc: vi.fn(),
+    store: { createTab: vi.fn() }
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.store } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorkspace: mocks.activate }))
 vi.mock('./worktree-runtime-owner', () => ({
   getKnownExecutionHostIdForWorktree: mocks.host,
   runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environment
 }))
-vi.mock('./workspace-port-actions', () => ({ scanWorkspacePortsForTarget: mocks.scan }))
-vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
-  createWebRuntimeSessionTerminalResult: mocks.remote
-}))
-vi.mock('./workspace-server-launches', () => ({
-  getWorkspaceServerLaunches: () => mocks.records,
-  saveWorkspaceServerLaunch: mocks.save
-}))
-
+vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('./workspace-server-launches', () => ({ getWorkspaceServerLaunches: () => mocks.records }))
 const entry: WorkspaceServerLaunch = {
   id: 'server',
   runtimeTarget: { kind: 'local' },
@@ -51,64 +35,51 @@ const entry: WorkspaceServerLaunch = {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.records = [{ ...entry }]
-  mocks.store.tabsByWorktree = {}
   mocks.host.mockReturnValue('local')
   mocks.environment.mockReturnValue(null)
-  mocks.scan.mockResolvedValue({ platform: 'unknown', scannedAt: 1, ports: [] })
+  mocks.rpc.mockResolvedValue({})
 })
-describe('start a saved server', () => {
-  it('executes the registered command in a fresh terminal with its registered directory', async () => {
+describe('managed server actions', () => {
+  it('starts on the owner without creating or selecting any terminal tab', async () => {
     await startWorkspaceServer(entry)
-    expect(mocks.store.createTab).toHaveBeenCalledWith(
-      'wt',
-      undefined,
-      undefined,
-      expect.objectContaining({ pendingStartup: { command: entry.command }, startupCwd: entry.cwd })
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'workspaceServers.start',
+      expect.objectContaining({
+        worktree: 'id:wt',
+        port: 4008,
+        command: entry.command,
+        cwd: entry.cwd
+      })
     )
-    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ launchTabId: 'new-tab' }))
-  })
-  it('refuses an occupied port, including a listener outside this workspace', async () => {
-    mocks.scan.mockResolvedValue({ ports: [{ kind: 'external', port: 4008 }] })
-    await expect(startWorkspaceServer(entry)).rejects.toThrow('already in use')
     expect(mocks.store.createTab).not.toHaveBeenCalled()
   })
-  it('does not start while the existing startup terminal is still pending', async () => {
-    const pending = { ...entry, launchTabId: 'pending' }
-    mocks.records = [pending]
-    mocks.store.tabsByWorktree = { wt: [{ id: 'pending' }] }
-    await expect(startWorkspaceServer(entry)).rejects.toThrow('existing startup terminal')
-    expect(mocks.scan).not.toHaveBeenCalled()
-  })
-  it('blocks repeated clicks while the first scan is in flight', async () => {
+  it('blocks repeated clicks until the host accepts the first start', async () => {
     let release: (() => void) | undefined
-    mocks.scan.mockImplementationOnce(
+    mocks.rpc.mockImplementationOnce(
       () =>
-        new Promise((resolve) => {
-          release = () => resolve({ ports: [] })
+        new Promise<void>((resolve) => {
+          release = resolve
         })
     )
     const first = startWorkspaceServer(entry)
     await expect(startWorkspaceServer(entry)).rejects.toThrow('already starting')
     release?.()
     await first
-    expect(mocks.store.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.rpc).toHaveBeenCalledTimes(1)
   })
-  it('fails closed when scanning is unavailable or the workspace host changed', async () => {
-    mocks.scan.mockResolvedValueOnce({ ports: [], unavailableReason: 'Scan unavailable' })
-    await expect(startWorkspaceServer(entry)).rejects.toThrow('Scan unavailable')
+  it('does not launch a removed or edited configuration', async () => {
+    mocks.records = [{ ...entry, command: 'other' }]
+    await expect(startWorkspaceServer(entry)).rejects.toThrow('configuration changed')
+    expect(mocks.rpc).not.toHaveBeenCalled()
+  })
+  it('refuses start and stop if the owner changed', async () => {
     mocks.host.mockReturnValue('ssh:other')
     await expect(startWorkspaceServer(entry)).rejects.toThrow('execution host changed')
-    expect(mocks.store.createTab).not.toHaveBeenCalled()
+    await expect(stopWorkspaceServer(entry, 'run')).rejects.toThrow('execution host changed')
+    expect(mocks.rpc).not.toHaveBeenCalled()
   })
-  it('does not execute a command that was edited while awaiting the scan', async () => {
-    mocks.scan.mockImplementationOnce(async () => {
-      mocks.records = [{ ...entry, command: 'other' }]
-      return { ports: [] }
-    })
-    await expect(startWorkspaceServer(entry)).rejects.toThrow('configuration changed')
-    expect(mocks.store.createTab).not.toHaveBeenCalled()
-  })
-  it('uses the paired host terminal creator rather than executing the command locally', async () => {
+  it('addresses a paired host relative to that host, without a local fallback', async () => {
     const remote: WorkspaceServerLaunch = {
       ...entry,
       runtimeTarget: { kind: 'environment', environmentId: 'host' },
@@ -117,11 +88,18 @@ describe('start a saved server', () => {
     mocks.records = [remote]
     mocks.host.mockReturnValue('runtime:host')
     mocks.environment.mockReturnValue('host')
-    mocks.remote.mockResolvedValue({ outcome: { status: 'created' }, hostTabId: 'host-tab' })
     await startWorkspaceServer(remote)
-    expect(mocks.remote).toHaveBeenCalledWith(
-      expect.objectContaining({ environmentId: 'host', command: entry.command, cwd: entry.cwd })
+    await stopWorkspaceServer(remote, 'owned-run')
+    expect(mocks.rpc).toHaveBeenLastCalledWith(
+      remote.runtimeTarget,
+      'workspaceServers.stop',
+      expect.objectContaining({ executionHostId: 'local', runId: 'owned-run' })
     )
+    expect(mocks.store.createTab).not.toHaveBeenCalled()
+  })
+  it('does not fall back to a terminal on an unsupported or failed host', async () => {
+    mocks.rpc.mockRejectedValueOnce(new Error('method_not_found'))
+    await expect(startWorkspaceServer(entry)).rejects.toThrow('method_not_found')
     expect(mocks.store.createTab).not.toHaveBeenCalled()
   })
 })

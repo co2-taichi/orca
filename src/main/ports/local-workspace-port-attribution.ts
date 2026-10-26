@@ -1,3 +1,4 @@
+import { WORKSPACE_SERVER_OUTPUT_SOURCE_PREFIX } from '../../shared/workspace-server-process'
 import path from 'node:path'
 import type {
   WorkspacePort,
@@ -90,7 +91,14 @@ export function enrichPort(
       protocol: advertised?.protocol ?? base.protocol,
       kind: 'workspace',
       owner,
-      ...(advertised ? { advertisedUrl: advertised.origin, sourcePtyId: advertised.ptyId } : {})
+      ...(advertised
+        ? {
+            advertisedUrl: advertised.origin,
+            ...(!advertised.ptyId.startsWith(WORKSPACE_SERVER_OUTPUT_SOURCE_PREFIX)
+              ? { sourcePtyId: advertised.ptyId }
+              : {})
+          }
+        : {})
     }
   }
   if (isContainerProcess(port)) {

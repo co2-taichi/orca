@@ -25,11 +25,13 @@ export function WorkspaceServerLaunchDialog({
   port,
   runtimeTarget,
   executionHostId,
-  onClose
+  onClose,
+  canRemove = true
 }: {
   port: WorkspacePort & { kind: 'workspace' }
   runtimeTarget: RuntimeClientTarget
   executionHostId: string
+  canRemove?: boolean
   onClose: () => void
 }): React.JSX.Element {
   const id = workspaceServerLaunchKey(
@@ -58,8 +60,7 @@ export function WorkspaceServerLaunchDialog({
         port: port.port,
         command: command.trim(),
         cwd: cwd.trim(),
-        sourcePtyId: port.sourcePtyId ?? existing?.sourcePtyId,
-        launchTabId: existing?.launchTabId
+        sourcePtyId: port.sourcePtyId ?? existing?.sourcePtyId
       })
       onClose()
     } catch (cause) {
@@ -86,7 +87,7 @@ export function WorkspaceServerLaunchDialog({
           <DialogDescription>
             {translate(
               'auto.components.right.sidebar.index.serverCommandDescription',
-              'Save a command to start this server from Servers after it stops. It runs in a new terminal on this workspace’s host.'
+              'Save a command to run this server in the background. Its logs and errors appear in Servers.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -147,6 +148,7 @@ export function WorkspaceServerLaunchDialog({
               <Button
                 type="button"
                 variant="outline"
+                disabled={!canRemove}
                 onClick={() => {
                   try {
                     removeWorkspaceServerLaunch(id)

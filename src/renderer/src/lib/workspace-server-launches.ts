@@ -15,7 +15,6 @@ export type WorkspaceServerLaunch = {
   cwd: string
   sourcePtyId?: string
   workspacePath: string
-  launchTabId?: string
 }
 
 const STORAGE_KEY = 'orca.workspace-server-launches.v1'
@@ -54,8 +53,7 @@ const launchSchema = z.object({
     .refine((value) => value.trim().length > 0),
   cwd: z.string().min(1),
   workspacePath: z.string().min(1),
-  sourcePtyId: z.string().optional(),
-  launchTabId: z.string().optional()
+  sourcePtyId: z.string().optional()
 })
 
 export function parseWorkspaceServerLaunches(value: unknown): WorkspaceServerLaunch[] {
