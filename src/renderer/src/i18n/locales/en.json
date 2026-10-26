@@ -14396,7 +14396,9 @@
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
             "parentPrChecks": "PR Checks",
-            "servers": "Servers"
+            "servers": "Servers",
+            "openServerLogs": "Open Logs",
+            "serverLogsUnavailable": "No source terminal available"
           },
           "right": {
             "panel": {

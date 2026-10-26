@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Box, Copy, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
+import { Box, Copy, ExternalLink, Info, Server, Square, ScrollText } from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
 import { addressForPort } from '@/lib/workspace-port-urls'
 import { Button } from '@/components/ui/button'
@@ -25,9 +25,11 @@ export function LocalPortRow({
   port,
   onStop,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  onOpenLogs
 }: {
   port: WorkspacePort
+  onOpenLogs?: (port: WorkspacePort) => void
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   /** Absent when this client has no route to the port's host. */
@@ -86,6 +88,12 @@ export function LocalPortRow({
   const openBrowserLabel = translate(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
+  )
+  const canOpenLogs = Boolean(onOpenLogs && port.kind === 'workspace' && port.sourcePtyId)
+  const logsLabel = translate('auto.components.right.sidebar.index.openServerLogs', 'Open Logs')
+  const noLogsLabel = translate(
+    'auto.components.right.sidebar.index.serverLogsUnavailable',
+    'No source terminal available'
   )
   const confidenceLabel =
     port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
@@ -171,6 +179,30 @@ export function LocalPortRow({
                 )}
               </TooltipContent>
             </Tooltip>
+            {canOpenLogs && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={(event) => {
+                      onOpenLogs?.(port)
+                      if (event.detail > 0) {
+                        event.currentTarget.blur()
+                      }
+                    }}
+                    aria-label={logsLabel}
+                  >
+                    <ScrollText size={13} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {logsLabel}
+                </TooltipContent>
+              </Tooltip>
+            )}
             {canStopProcess && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -185,7 +217,7 @@ export function LocalPortRow({
                       'Stop Process'
                     )}
                   >
-                    <Trash2 size={13} />
+                    <Square size={13} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
@@ -229,6 +261,14 @@ export function LocalPortRow({
           <Info size={13} />
           {translate('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
         </ContextMenuItem>
+        <ContextMenuItem
+          className={LOCAL_PORT_MENU_ITEM_CLASS}
+          disabled={!canOpenLogs}
+          onSelect={() => onOpenLogs?.(port)}
+        >
+          <ScrollText size={13} />
+          {canOpenLogs ? logsLabel : noLogsLabel}
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
@@ -236,7 +276,7 @@ export function LocalPortRow({
           disabled={!canStopProcess}
           onSelect={() => onStop(port)}
         >
-          <Trash2 size={13} />
+          <Square size={13} />
           {translate('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
         </ContextMenuItem>
       </ContextMenuContent>

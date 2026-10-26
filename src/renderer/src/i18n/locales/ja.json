@@ -14009,7 +14009,9 @@
             "aiVaultSessionHistory": "Agent",
             "folderWorkspaces": "添付ワークツリー",
             "parentPrChecks": "PR チェック",
-            "servers": "サーバー"
+            "servers": "サーバー",
+            "openServerLogs": "ログを開く",
+            "serverLogsUnavailable": "起動元ターミナルがありません"
           },
           "right": {
             "panel": {

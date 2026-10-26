@@ -90,7 +90,7 @@ export function enrichPort(
       protocol: advertised?.protocol ?? base.protocol,
       kind: 'workspace',
       owner,
-      ...(advertised ? { advertisedUrl: advertised.origin } : {})
+      ...(advertised ? { advertisedUrl: advertised.origin, sourcePtyId: advertised.ptyId } : {})
     }
   }
   if (isContainerProcess(port)) {

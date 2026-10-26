@@ -1,3 +1,4 @@
+import { openWorkspacePortLogs } from '@/lib/workspace-port-logs'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
@@ -176,6 +177,20 @@ export function LocalWorkspacePortsPanel({
     [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
   )
 
+  const handleOpenLogs = useCallback(
+    (port: WorkspacePort) => {
+      if (!openWorkspacePortLogs(port, runtimeTarget)) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.index.serverLogsUnavailable',
+            'No source terminal available'
+          )
+        )
+      }
+    },
+    [runtimeTarget]
+  )
+
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
     () => getLocalWorkspacePortSections(displayScan, activeRepoId, activeWorktree?.id),
     [activeRepoId, activeWorktree?.id, displayScan]
@@ -267,6 +282,7 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            onOpenLogs={handleOpenLogs}
           />
           <LocalPortSection
             id="other"
@@ -280,6 +296,7 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            onOpenLogs={handleOpenLogs}
           />
           <LocalPortSection
             id="external"
@@ -290,6 +307,7 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            onOpenLogs={handleOpenLogs}
           />
         </>
       )}

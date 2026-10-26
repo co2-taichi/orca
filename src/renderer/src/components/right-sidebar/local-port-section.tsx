@@ -13,7 +13,8 @@ export function LocalPortSection({
   onToggle,
   onStopPort,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  onOpenLogs
 }: {
   id: string
   title: string
@@ -21,6 +22,7 @@ export function LocalPortSection({
   emptyText?: string
   collapsed: boolean
   onToggle: () => void
+  onOpenLogs?: (port: WorkspacePort) => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
@@ -59,6 +61,7 @@ export function LocalPortSection({
                   onStop={onStopPort}
                   onShowDetails={onShowDetails}
                   onOpenInBrowser={onOpenInBrowser}
+                  onOpenLogs={onOpenLogs}
                 />
               ))
             : emptyText && <div className="py-1 text-xs text-muted-foreground">{emptyText}</div>}
