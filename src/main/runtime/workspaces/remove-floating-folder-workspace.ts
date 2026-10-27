@@ -17,6 +17,7 @@ export async function removeFloatingFolderWorkspace(
   if (!store?.removeFolderWorkspace) {
     throw new Error('runtime_unavailable')
   }
+  const removeFolderWorkspace = store.removeFolderWorkspace.bind(store)
   const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
   if (workspace && isLocalWslMoveRow(workspace)) {
     assertWslMoveProjectWritable(store, { folderWorkspaceId })
@@ -47,7 +48,7 @@ export async function removeFloatingFolderWorkspace(
         }
         deps.cleanupRemovedFolderWorkspaceState(worktreeId)
       }
-      const deleted = store.removeFolderWorkspace(folderWorkspaceId)
+      const deleted = removeFolderWorkspace(folderWorkspaceId)
       if (deleted) {
         deps.notifyReposChanged()
         // The same removal a worktree announces, so its consumers end work held there too.

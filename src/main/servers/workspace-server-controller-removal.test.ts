@@ -90,6 +90,8 @@ function folderFixture(connectionId: string | null = null) {
     isUnread: false,
     isPinned: false,
     sortOrder: 0,
+    lastActivityAt: 0,
+    updatedAt: 0,
     createdAt: 0
   }
   const remove = vi.fn(() => true)

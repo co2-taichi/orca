@@ -132,6 +132,7 @@ export class RuntimeRepositorySettingsController {
     if (!store?.removeProjectForHost) {
       throw new Error('runtime_unavailable')
     }
+    const removeProjectForHost = store.removeProjectForHost.bind(store)
     const repo = typeof target === 'string' ? await this.deps.resolveRepo(target) : target
     assertWslMoveRepoWritable(store, repo)
     return withProjectServerRemoval(this.deps.workspaceServers, repo, store, async () => {
@@ -147,7 +148,7 @@ export class RuntimeRepositorySettingsController {
       await stopProjectTerminals(false)
       // Recheck WSL fence after stop awaits.
       assertWslMoveRepoWritable(store, repo)
-      store.removeProjectForHost(repo)
+      removeProjectForHost(repo)
       // Sweep again for terminals spawned during stop. Retire chats only after the final WSL fence because that step is irreversible.
       await stopProjectTerminals(teardownStops('project-removal', 'structured-chat'))
       this.deps.forgetTerminalTopology(repo.id)
