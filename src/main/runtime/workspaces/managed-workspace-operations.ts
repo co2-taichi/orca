@@ -1,5 +1,5 @@
 import { realpath } from 'node:fs/promises'
-import { WorkspaceServerProcessManager } from '../../servers/workspace-server-process-manager'
+import { beginTerminalInstall } from '../../ipc/watcher-removal-gate'
 import { prepareWorkspaceServerCommand } from '../../servers/workspace-server-command'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
@@ -169,8 +169,6 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
   }
 
-  readonly workspaceServers = new WorkspaceServerProcessManager()
-
   async resolveWorkspaceServerScope(worktree: string, expectedHost: string) {
     const target = await this.resolveRuntimeFileTarget(worktree)
     if (target.executionHostId !== expectedHost || target.executionHostId !== 'local') {
@@ -193,31 +191,43 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     command: string
     cwd: string
   }) {
-    const scope = await this.resolveWorkspaceServerScope(args.worktree, args.executionHostId)
-    const prepared = await prepareWorkspaceServerCommand({
-      rootPath: scope.path,
-      cwd: args.cwd,
-      command: args.command,
-      settings: this.store?.getSettings()
-    })
-    const scan = await this.scanWorkspacePorts()
-    if (scan.unavailableReason) {
-      throw new Error(scan.unavailableReason)
+    const permit = this.workspaceServers.beginStart()
+    try {
+      const scope = await this.resolveWorkspaceServerScope(args.worktree, args.executionHostId)
+      const prepared = await prepareWorkspaceServerCommand({
+        rootPath: scope.path,
+        cwd: args.cwd,
+        command: args.command,
+        settings: this.store?.getSettings()
+      })
+      const scan = await this.scanWorkspacePorts()
+      if (scan.unavailableReason) {
+        throw new Error(scan.unavailableReason)
+      }
+      if (scan.ports.some((port) => port.port === args.port)) {
+        throw new Error(`Port ${args.port} is already in use.`)
+      }
+      const confirmedScope = await this.resolveWorkspaceServerScope(
+        args.worktree,
+        args.executionHostId
+      )
+      if ((await realpath(confirmedScope.path)) !== prepared.root) {
+        throw new Error('The workspace changed while starting the server.')
+      }
+      // The path gate also covers accepted background Git removals. No await before spawn.
+      const releaseInstall = beginTerminalInstall(prepared.root)
+      try {
+        return this.workspaceServers.start(
+          { worktreeId: scope.id, port: args.port, name: args.name },
+          prepared.spec,
+          permit
+        )
+      } finally {
+        releaseInstall()
+      }
+    } finally {
+      permit.release()
     }
-    if (scan.ports.some((port) => port.port === args.port)) {
-      throw new Error(`Port ${args.port} is already in use.`)
-    }
-    const confirmedScope = await this.resolveWorkspaceServerScope(
-      args.worktree,
-      args.executionHostId
-    )
-    if ((await realpath(confirmedScope.path)) !== prepared.root) {
-      throw new Error('The workspace changed while starting the server.')
-    }
-    return this.workspaceServers.start(
-      { worktreeId: scope.id, port: args.port, name: args.name },
-      prepared.spec
-    )
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

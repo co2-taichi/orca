@@ -26,6 +26,7 @@ function idlePorts(): OrcadManagedIdleExitPorts {
     hasChatProviders: () => false,
     hasStagedMigration: () => false,
     automationsBusy: () => false,
+    managedServersBusy: () => false,
     emulatorsBusy: async () => false,
     activationFenceExists: async () => false
   }
@@ -78,6 +79,7 @@ describe('createOrcadIdleProbes', () => {
       'chat-providers': 'idle',
       migration: 'idle',
       automations: 'idle',
+      servers: 'idle',
       emulators: 'idle',
       activation: 'idle'
     })
@@ -142,4 +144,12 @@ describe('activationFenceExists', () => {
     mkdirSync(join(fence, '.install-lock'))
     expect(await activationFenceExists(fence)).toBe(true)
   })
+})
+
+it('keeps the managed host busy while a workspace server is running or stopping', async () => {
+  const ports = idlePorts()
+  ports.managedServersBusy = () => true
+  expect((await verdicts(ports)).servers).toBe('busy')
+  ports.managedServersBusy = () => false
+  expect((await verdicts(ports)).servers).toBe('idle')
 })

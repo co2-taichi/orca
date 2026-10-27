@@ -1,3 +1,16 @@
+import { WorkspaceServerSubscriptions } from './workspace-server-subscriptions'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import {
+  WorkspaceServerStartAdmission,
+  type WorkspaceServerStartPermit
+} from './workspace-server-start-admission'
+import {
+  type WorkspaceServerRun as Run,
+  isWorkspaceServerActive as active,
+  retireInactiveServerRun,
+  stopServerRuns,
+  forceCloseServerRuns
+} from './workspace-server-runs'
 import { randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
 import { stripVTControlCharacters } from 'node:util'
@@ -13,44 +26,51 @@ import {
   trimServerLogs,
   serverLogLevel,
   type WorkspaceServerFrame,
-  type WorkspaceServerInfo,
   type WorkspaceServerLogLine,
   type WorkspaceServerSnapshot
 } from '../../shared/workspace-server-process'
 
-type Run = {
-  info: Omit<WorkspaceServerInfo, 'active'>
-  child: PipedChildProcess | null
-  logs: WorkspaceServerLogLine[]
-  pending: WorkspaceServerLogLine[]
-  timer?: ReturnType<typeof setTimeout>
-  stopped: boolean
-  done: Promise<void>
-  finish: () => void
-  stopPromise?: Promise<WorkspaceServerSnapshot>
-}
-const active = (run: Run) =>
-  run.child !== null || ['starting', 'running', 'stopping'].includes(run.info.status)
-
 export class WorkspaceServerProcessManager {
   private readonly runs = new Map<string, Run>()
-  private readonly listeners = new Map<string, Set<(frame: WorkspaceServerFrame) => void>>()
+  private readonly listeners = new WorkspaceServerSubscriptions()
+  private readonly admission = new WorkspaceServerStartAdmission()
   private seq = 0
   private closing = false
   constructor(
     private readonly spawn: (spec: PipedProcessSpec) => PipedChildProcess = spawnProcess
   ) {}
+  beginStart(): WorkspaceServerStartPermit {
+    return this.admission.beginStart()
+  }
+  beginWorktreeRemoval(worktreeId: string): () => void {
+    return this.admission.beginWorktreeRemoval(worktreeId)
+  }
+  beginProjectRemoval(repoId: string): () => void {
+    return this.admission.beginProjectRemoval(repoId)
+  }
+  async stopProject(repoId: string): Promise<void> {
+    await stopServerRuns(
+      this.runs.values(),
+      (run) => getRepoIdFromWorktreeId(run.info.worktreeId) === repoId,
+      this.stop.bind(this)
+    )
+  }
+  hasActiveServers(): boolean {
+    return (
+      this.admission.pending ||
+      [...this.runs.values()].some((run) => active(run) || Boolean(run.stopPromise))
+    )
+  }
+  async stopWorktree(worktreeId: string): Promise<void> {
+    await stopServerRuns(
+      this.runs.values(),
+      (run) => run.info.worktreeId === worktreeId,
+      this.stop.bind(this)
+    )
+  }
+
   private key(worktreeId: string, port: number): string {
     return JSON.stringify([worktreeId, port])
-  }
-  private emit(worktreeId: string, frame: WorkspaceServerFrame): void {
-    for (const listener of this.listeners.get(worktreeId) ?? []) {
-      try {
-        listener(frame)
-      } catch {
-        this.listeners.get(worktreeId)?.delete(listener)
-      }
-    }
   }
   private snapshot(run: Run): WorkspaceServerSnapshot {
     return { ...run.info, active: active(run), logs: [...run.logs] }
@@ -63,7 +83,7 @@ export class WorkspaceServerProcessManager {
     run.timer = undefined
     const lines = run.pending
     run.pending = []
-    this.emit(run.info.worktreeId, {
+    this.listeners.emit(run.info.worktreeId, {
       type: 'update',
       info: { ...run.info, active: active(run) },
       lines,
@@ -83,7 +103,7 @@ export class WorkspaceServerProcessManager {
       run.info.errorCount += 1
     }
     run.logs = trimServerLogs([...run.logs, line])
-    if (!this.listeners.get(run.info.worktreeId)?.size) {
+    if (!this.listeners.has(run.info.worktreeId)) {
       return
     }
     run.pending = trimServerLogs([...run.pending, line])
@@ -91,18 +111,27 @@ export class WorkspaceServerProcessManager {
   }
   start(
     args: { worktreeId: string; port: number; name: string },
-    spec: PipedProcessSpec
+    spec: PipedProcessSpec,
+    permit?: WorkspaceServerStartPermit
   ): WorkspaceServerSnapshot {
     const key = this.key(args.worktreeId, args.port)
     if (this.closing) {
       throw new Error('Server host is shutting down.')
     }
+    permit?.validate(args.worktreeId)
+    this.admission.assertAvailable(args.worktreeId)
     const previous = this.runs.get(key)
     if (previous && (active(previous) || previous.stopPromise)) {
       throw new Error('This server is already running.')
     }
     if (!previous && this.runs.size >= 64) {
-      throw new Error('Too many managed servers.')
+      const run = retireInactiveServerRun(this.runs)
+      this.listeners.emit(run.info.worktreeId, {
+        type: 'snapshot',
+        runs: [...this.runs.values()]
+          .filter((entry) => entry.info.worktreeId === run.info.worktreeId)
+          .map((entry) => this.snapshot(entry))
+      })
     }
     if (previous) {
       clearTimeout(previous.timer)
@@ -239,24 +268,13 @@ export class WorkspaceServerProcessManager {
     return run.stopPromise
   }
   subscribe(worktreeId: string, listener: (frame: WorkspaceServerFrame) => void): () => void {
-    let listeners = this.listeners.get(worktreeId)
-    if (!listeners) {
-      listeners = new Set()
-      this.listeners.set(worktreeId, listeners)
-    }
-    listeners.add(listener)
-    listener({
-      type: 'snapshot',
-      runs: [...this.runs.values()]
+    return this.listeners.subscribe(
+      worktreeId,
+      listener,
+      [...this.runs.values()]
         .filter((run) => run.info.worktreeId === worktreeId)
         .map((run) => this.snapshot(run))
-    })
-    return () => {
-      listeners.delete(listener)
-      if (!listeners.size) {
-        this.listeners.delete(worktreeId)
-      }
-    }
+    )
   }
   private beginShutdown(): void {
     this.closing = true
@@ -268,32 +286,10 @@ export class WorkspaceServerProcessManager {
   }
   async forceClose(): Promise<void> {
     this.beginShutdown()
-    const results = await Promise.allSettled(
-      [...this.runs.values()].map(async (run) => {
-        if (!run.child) {
-          return
-        }
-        run.stopped = true
-        if (!(await forceTerminateProcessTree(run.child))) {
-          throw new Error('Could not verify server termination.')
-        }
-      })
-    )
-    const failed = results.find((result) => result.status === 'rejected')
-    if (failed?.status === 'rejected') {
-      throw failed.reason
-    }
+    await forceCloseServerRuns(this.runs.values())
   }
   async close(): Promise<void> {
     this.beginShutdown()
-    const results = await Promise.allSettled(
-      [...this.runs.values()]
-        .filter(active)
-        .map((run) => this.stop(run.info.worktreeId, run.info.port, run.info.id))
-    )
-    const failed = results.find((result) => result.status === 'rejected')
-    if (failed?.status === 'rejected') {
-      throw failed.reason
-    }
+    await stopServerRuns(this.runs.values(), () => true, this.stop.bind(this))
   }
 }

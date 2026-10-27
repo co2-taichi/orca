@@ -1,3 +1,4 @@
+import { stopWorkspaceServersForRemoval } from '../../../servers/workspace-server-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -89,6 +90,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await stopWorkspaceServersForRemoval(runtime, args.worktreeId, removalHostId)
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
@@ -119,6 +121,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await stopWorkspaceServersForRemoval(runtime, args.worktreeId, removalHostId)
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
