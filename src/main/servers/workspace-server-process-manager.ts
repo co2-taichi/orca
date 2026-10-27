@@ -258,17 +258,39 @@ export class WorkspaceServerProcessManager {
       }
     }
   }
-  async close(): Promise<void> {
+  private beginShutdown(): void {
     this.closing = true
+    this.listeners.clear()
+    for (const run of this.runs.values()) {
+      clearTimeout(run.timer)
+      run.timer = undefined
+    }
+  }
+  async forceClose(): Promise<void> {
+    this.beginShutdown()
+    const results = await Promise.allSettled(
+      [...this.runs.values()].map(async (run) => {
+        if (!run.child) {
+          return
+        }
+        run.stopped = true
+        if (!(await forceTerminateProcessTree(run.child))) {
+          throw new Error('Could not verify server termination.')
+        }
+      })
+    )
+    const failed = results.find((result) => result.status === 'rejected')
+    if (failed?.status === 'rejected') {
+      throw failed.reason
+    }
+  }
+  async close(): Promise<void> {
+    this.beginShutdown()
     const results = await Promise.allSettled(
       [...this.runs.values()]
         .filter(active)
         .map((run) => this.stop(run.info.worktreeId, run.info.port, run.info.id))
     )
-    for (const run of this.runs.values()) {
-      clearTimeout(run.timer)
-    }
-    this.listeners.clear()
     const failed = results.find((result) => result.status === 'rejected')
     if (failed?.status === 'rejected') {
       throw failed.reason
