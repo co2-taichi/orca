@@ -1,3 +1,4 @@
+import { settleWorkspaceServerRemoval } from '../../servers/workspace-server-background-removal'
 import {
   beginWorkspaceServerRemoval,
   stopWorkspaceServersForRemoval
@@ -287,18 +288,12 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
       })
     })()
     this.removeManagedWorktreeInFlight.track(cleanupScopeKey, optionsKey, removal)
-    try {
-      const accepted = await removal
-      // A background removal emits this when Git finishes instead.
-      if (!accepted.removing) {
-        emitRemoved()
-      }
-      return options.waitForBackgroundRemoval
-        ? finishAcceptedWorktreeRemoval(accepted, removalTarget.id, cleanupHostId)
-        : accepted
-    } finally {
-      releaseServers?.()
-      this.removeManagedWorktreeInFlight.release(cleanupScopeKey, removal)
-    }
+    return settleWorkspaceServerRemoval(removal, {
+      worktreeId: removalTarget.id,
+      hostId: cleanupHostId,
+      waitForBackgroundRemoval: options.waitForBackgroundRemoval,
+      release: releaseServers,
+      onRemoved: emitRemoved
+    }).finally(() => this.removeManagedWorktreeInFlight.release(cleanupScopeKey, removal))
   }
 }

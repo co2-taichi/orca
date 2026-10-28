@@ -1,3 +1,5 @@
+import { settleBeforeDeadline } from '../runtime/settle-before-deadline'
+import { describeError } from '../runtime/unstopped-pty-verification'
 import type { WorkspaceServerProcessManager } from './workspace-server-process-manager'
 
 type ServerRuntime = { workspaceServers?: WorkspaceServerProcessManager }
@@ -35,4 +37,25 @@ export function beginWorkspaceServerRemoval(
   return !hostId || hostId === 'local'
     ? runtime.workspaceServers?.beginWorktreeRemoval(worktreeId)
     : undefined
+}
+
+export async function settleWorkspaceServerStop(
+  stop: () => Promise<void>,
+  args: {
+    worktreeId: string
+    deadline: number
+    deadlineError: Error
+    allowUnverifiedStop?: boolean
+  }
+): Promise<void> {
+  try {
+    await settleBeforeDeadline(stop, undefined, args.deadline, args.deadlineError)
+  } catch (error) {
+    if (!args.allowUnverifiedStop) {
+      throw error
+    }
+    console.warn(
+      `[worktree-teardown] forcing removal despite unverified server stop for ${args.worktreeId}: ${describeError(error)}`
+    )
+  }
 }

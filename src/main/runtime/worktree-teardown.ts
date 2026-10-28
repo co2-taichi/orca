@@ -1,4 +1,7 @@
-import { stopWorkspaceServersForRemoval } from '../servers/workspace-server-removal'
+import {
+  settleWorkspaceServerStop,
+  stopWorkspaceServersForRemoval
+} from '../servers/workspace-server-removal'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -81,21 +84,20 @@ export async function killAllProcessesForWorktree(
   const deadlineError = new Error(
     `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
   )
+  const sweeps = createWorktreeSweepTracker()
   if (deps.requirePhysicalStop || deps.closeStructuredSessions) {
     // Managed servers live outside PTY inventories. A failed stop must keep deletion retryable.
-    await settleBeforeDeadline(
-      () =>
+    await settleWorkspaceServerStop(
+      sweeps.track(() =>
         stopWorkspaceServersForRemoval(
           deps.runtime,
           deps.resolvedWorktreeId ?? worktreeId,
           deps.resolvedConnectionId || deps.resolvedRuntimeEnvironmentId ? 'remote' : 'local'
-        ),
-      undefined,
-      deadline,
-      deadlineError
+        )
+      ),
+      { worktreeId, deadline, deadlineError, allowUnverifiedStop: deps.allowUnverifiedStop }
     )
   }
-  const sweeps = createWorktreeSweepTracker()
   // Start structured closure before PTYs so intentional stops are recorded; await alongside them so serial provider round trips cannot consume their budget. Structured refusal still precedes PTY verdict.
   const structuredSweep = sweepStructuredSessions(worktreeId, deps, deadline, sweeps)
   void structuredSweep.catch(() => undefined)
