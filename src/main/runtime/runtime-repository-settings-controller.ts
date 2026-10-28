@@ -26,6 +26,7 @@ type RuntimeRepositorySettingsDependencies = {
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
+  notifyWorktreesChanged: (repoId: string, options: { invalidateGitScans: false }) => void
 }
 
 type RepositoryUpdates = Partial<
@@ -47,6 +48,8 @@ type RepositoryUpdates = Partial<
     | 'externalWorktreeInboxBaselinePaths'
     | 'importedExternalWorktreePaths'
     | 'agentWorktreeVisibility'
+    | 'customWorktreeVisibilitySources'
+    | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
     | 'projectGroupOrder'
   >
@@ -56,6 +59,16 @@ type RepositoryUpdates = Partial<
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
 }
+
+// Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.
+const WORKTREE_VISIBILITY_INPUTS = [
+  'externalWorktreeVisibility',
+  'importedExternalWorktreePaths',
+  'agentWorktreeVisibility',
+  'worktreeBasePath',
+  'customWorktreeVisibilitySources',
+  'worktreeVisibilitySourcePreferences'
+] as const satisfies readonly (keyof RepositoryUpdates)[]
 
 function omitUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
@@ -123,6 +136,9 @@ export class RuntimeRepositorySettingsController {
       this.deps.invalidateWorktreeScan(repo.id)
     }
     this.deps.notifyReposChanged()
+    if (WORKTREE_VISIBILITY_INPUTS.some((key) => key in updates)) {
+      this.deps.notifyWorktreesChanged(repo.id, { invalidateGitScans: false })
+    }
     return updated
   }
 

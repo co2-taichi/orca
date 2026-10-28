@@ -2,7 +2,7 @@ import { app } from 'electron'
 import { quitProcess } from './process-quit-request'
 import type { WorkspaceServerProcessManager } from '../servers/workspace-server-process-manager'
 import { registerServeSignalHandlers } from './serve-signal-handlers'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
@@ -166,6 +166,11 @@ export function patchPackagedProcessPath(): void {
         join(home, '.vite-plus/bin'),
         join(home, '.grok/bin')
       )
+    }
+
+    if (process.platform === 'darwin' && existsSync('/opt/local/bin/port')) {
+      // MacPorts is rare, so gate on default-prefix `port`; last so it only fills gaps, never re-ranks seeded dirs.
+      appendPaths.push('/opt/local/bin', '/opt/local/sbin')
     }
   }
 
