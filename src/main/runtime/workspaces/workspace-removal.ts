@@ -101,12 +101,8 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
     if (pending) {
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
-    const emitRemoved = (): void =>
-      this.emitWorktreeLifecycle({
-        kind: 'removed',
-        worktreeId: removalTarget.id,
-        path: removalTarget.path
-      })
+    const { id: worktreeId, path } = removalTarget
+    const emitRemoved = this.emitWorktreeLifecycle.bind(this, { kind: 'removed', worktreeId, path })
     const cleanupScopeKey = preservedBranchCleanupScopeKey({
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
@@ -178,15 +174,14 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWi
           force,
           localWorktreeGitOptions
         )
-        if (
-          await this.retryFailedRemoval(
-            route,
-            removalTarget,
-            registeredWorktrees,
-            options,
-            localWorktreeGitOptions
-          )
-        ) {
+        const retried = await this.retryFailedRemoval(
+          route,
+          removalTarget,
+          registeredWorktrees,
+          options,
+          localWorktreeGitOptions
+        )
+        if (retried) {
           return { removing: true }
         }
         if (!registeredWorktree) {
