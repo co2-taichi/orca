@@ -52,9 +52,8 @@ export function LocalWorkspacePortsPanel({
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
-  const executionHostId = getKnownExecutionHostIdForWorktree(
-    useAppStore.getState(),
-    activeWorktree?.id
+  const executionHostId = useAppStore((s) =>
+    getKnownExecutionHostIdForWorktree(s, activeWorktree?.id)
   )
   const [configureContext, setConfigureContext] = useState<{
     port: WorkspacePort & { kind: 'workspace' }

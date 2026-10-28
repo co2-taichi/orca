@@ -288,14 +288,16 @@ export function LocalPortRow({
           <Info size={13} />
           {translate('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
         </ContextMenuItem>
-        <ContextMenuItem
-          className={LOCAL_PORT_MENU_ITEM_CLASS}
-          disabled={!canOpenLogs}
-          onSelect={() => onOpenLogs?.(port)}
-        >
-          <ScrollText size={13} />
-          {canOpenLogs ? logsLabel : noLogsLabel}
-        </ContextMenuItem>
+        {onOpenLogs && port.kind === 'workspace' && (
+          <ContextMenuItem
+            className={LOCAL_PORT_MENU_ITEM_CLASS}
+            disabled={!canOpenLogs}
+            onSelect={() => onOpenLogs(port)}
+          >
+            <ScrollText size={13} />
+            {canOpenLogs ? logsLabel : noLogsLabel}
+          </ContextMenuItem>
+        )}
         {onConfigureServer && port.kind === 'workspace' && (
           <ContextMenuItem
             className={LOCAL_PORT_MENU_ITEM_CLASS}
