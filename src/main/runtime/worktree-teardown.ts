@@ -86,7 +86,10 @@ export async function killAllProcessesForWorktree(
   )
   const sweeps = createWorktreeSweepTracker()
   if (deps.requirePhysicalStop || deps.closeStructuredSessions) {
-    // Managed servers live outside PTY inventories. A failed stop must keep deletion retryable.
+    // Force Delete must leave time for PTY and structured-session sweeps after a hung server stop.
+    const serverStopDeadline = deps.allowUnverifiedStop
+      ? Math.min(deadline, Date.now() + sweepBudgetMs / 2)
+      : deadline
     await settleWorkspaceServerStop(
       sweeps.track(() =>
         stopWorkspaceServersForRemoval(
@@ -95,7 +98,12 @@ export async function killAllProcessesForWorktree(
           deps.resolvedConnectionId || deps.resolvedRuntimeEnvironmentId ? 'remote' : 'local'
         )
       ),
-      { worktreeId, deadline, deadlineError, allowUnverifiedStop: deps.allowUnverifiedStop }
+      {
+        worktreeId,
+        deadline: serverStopDeadline,
+        deadlineError,
+        allowUnverifiedStop: deps.allowUnverifiedStop
+      }
     )
   }
   // Start structured closure before PTYs so intentional stops are recorded; await alongside them so serial provider round trips cannot consume their budget. Structured refusal still precedes PTY verdict.
