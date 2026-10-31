@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   ActivityIndicator,
@@ -23,7 +24,8 @@ import {
 
 export function renderMobileTasksLinearList(
   model: ConnectionPresentationModel,
-  colorScheme: MobileColorScheme
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
 ) {
   const {
     effectiveLinearDisplayProperties,
@@ -41,18 +43,21 @@ export function renderMobileTasksLinearList(
     setLinearStatusPickerItem
   } = model
   return loading ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : linearIssuesForView.length === 0 ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>{emptyLabel}</Text>
     </View>
   ) : linearViewMode === 'board' ? (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={[styles.boardContainer, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.boardContainer,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
     >
       {linearBoardSections.map((section) => (
         <View key={section.key} style={styles.boardColumn}>
@@ -86,7 +91,13 @@ export function renderMobileTasksLinearList(
                     style={[styles.statusPillSelf, styles.linearStatePill]}
                     disabled={mutatingStatus}
                     accessibilityRole="button"
-                    accessibilityLabel={`Change status from ${issue.state.name}`}
+                    accessibilityLabel={translate(
+                      'tasks.linearList.changeStatusFrom',
+                      'Change status from {{status}}',
+                      {
+                        status: issue.state.name
+                      }
+                    )}
                     onPress={(event) => {
                       event.stopPropagation()
                       triggerMediumImpact()
@@ -125,7 +136,10 @@ export function renderMobileTasksLinearList(
           <View style={styles.separator} />
         )
       }
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={refreshing}
       onRefresh={refreshTasks}
       renderItem={({ item: entry }) => {
@@ -175,7 +189,13 @@ export function renderMobileTasksLinearList(
                   style={[styles.statusPill, styles.linearStatePill]}
                   disabled={mutatingStatus}
                   accessibilityRole="button"
-                  accessibilityLabel={`Change status from ${issue.state.name}`}
+                  accessibilityLabel={translate(
+                    'tasks.linearList.changeStatusFrom',
+                    'Change status from {{status}}',
+                    {
+                      status: issue.state.name
+                    }
+                  )}
                   onPress={(event) => {
                     event.stopPropagation()
                     triggerMediumImpact()

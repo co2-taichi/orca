@@ -2,6 +2,7 @@ import { WORKSPACE_SERVER_OUTPUT_SOURCE_PREFIX } from '../../shared/workspace-se
 import path from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { blockedWslDistroForPath } from '../wsl/wsl-unc-access-gate'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type {
@@ -34,7 +35,7 @@ function observeRealpath(root: string, deadline: number): Promise<string | null 
         release()
         return undefined
       }
-      return realpath(root).then(normalizeComparablePath).finally(release)
+      return realpathUnlessWslStopped(root).finally(release)
     })
     .catch((error: unknown) =>
       error instanceof Error &&
@@ -53,6 +54,17 @@ function observeRealpath(root: string, deadline: number): Promise<string | null 
   )
   pendingRealpaths.set(root, operation)
   return operation
+}
+
+/**
+ * A WSL root's realpath is a 9P touch that starts a stopped distro (E9). The port scan is background,
+ * so it never wakes one: a stopped root's alias stays unknown, as a timed-out lookup's does.
+ */
+async function realpathUnlessWslStopped(root: string): Promise<string | undefined> {
+  if (await blockedWslDistroForPath(root)) {
+    return undefined
+  }
+  return normalizeComparablePath(await realpath(root))
 }
 
 const HTTP_PORTS: Record<number, true> = {

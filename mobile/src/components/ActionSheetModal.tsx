@@ -1,18 +1,21 @@
 import { useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
-import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { Check, Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
+  id?: string
   label: string
   icon?: LucideIcon
   renderIcon?: () => ReactNode
   destructive?: boolean
   disabled?: boolean
   hint?: string
+  /** Marks the choice that is current, as a trailing check. */
+  checked?: boolean
   loading?: boolean
   skipAutoClose?: boolean
   closeBeforePress?: boolean
@@ -68,7 +71,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
           const Icon = iconForAction(action.label, action.destructive, action.icon)
           const customIcon = action.renderIcon?.()
           return (
-            <View key={action.label}>
+            <View key={action.id ?? action.label}>
               {i > 0 && <View style={styles.separator} />}
               <Pressable
                 style={({ pressed }) => [
@@ -77,6 +80,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
                   pressed && !action.disabled && !action.loading && styles.actionPressed
                 ]}
                 disabled={action.disabled || action.loading}
+                accessibilityState={action.checked ? { checked: true } : undefined}
                 onPress={() => {
                   action.onPress()
                   if (!action.skipAutoClose && onClose) {
@@ -104,6 +108,8 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
                 </View>
                 {action.loading ? (
                   <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : action.checked ? (
+                  <Check size={18} color={colors.textPrimary} />
                 ) : null}
               </Pressable>
             </View>
@@ -165,8 +171,8 @@ const styles = themedStyleSheet(() => ({
     marginTop: 2
   },
   actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   separator: {
@@ -185,7 +191,7 @@ const styles = themedStyleSheet(() => ({
     opacity: 0.58
   },
   actionPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   actionTextBlock: {
     flex: 1,

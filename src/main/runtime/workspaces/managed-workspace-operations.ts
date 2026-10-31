@@ -1,6 +1,9 @@
-import { realpath } from 'node:fs/promises'
-import { beginTerminalInstall } from '../../ipc/watcher-removal-gate'
-import { prepareWorkspaceServerCommand } from '../../servers/workspace-server-command'
+import {
+  launchManagedWorkspaceServer,
+  type ManagedWorkspaceServerStart
+} from '../../servers/workspace-server-launch'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../session-tabs/structured-session-tab-restoration'
 import { DEFAULT_WORKTREE_LIST_LIMIT } from '../orca-runtime-postlude'
@@ -34,7 +37,7 @@ import {
   type WorkspacePortExecutionHostDeps
 } from '../../ports/workspace-port-execution-host'
 import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
@@ -49,6 +52,11 @@ import { WorkspaceLifecycleQueue } from './workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
 
 export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
+  protected abstract resolveFolderWorkspaceSelector(
+    selector: string,
+    requiredHostId?: ExecutionHostId
+  ): FolderWorkspace | null
+
   protected abstract resolveTerminalWorkspaceLaunchTarget(
     ...args: Parameters<
       OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchTarget']
@@ -148,21 +156,57 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     )
   }
 
-  async showManagedWorktree(worktreeSelector: string) {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+  async showManagedWorktree(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector, { requiredHostId })
     return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
   }
 
-  /** Resolve a git record, refusing floating workspaces; use launch scope when only id/path is needed. */
-  async showManagedTerminalWorkspace(worktreeSelector: string) {
-    const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
+  /**
+   * The git worktree record behind a terminal workspace. Refuses the floating sentinel, which has
+   * no such record — callers that only need to address the workspace want the scope below instead.
+   */
+  async showManagedTerminalWorkspace(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
+    const target = await this.resolveManagedTerminalWorkspaceTarget(
+      worktreeSelector,
+      requiredHostId
+    )
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
     }
     return target.managedWorktree
   }
 
-  /** Resolve id/path uniformly for git, folder and floating workspaces; requiring a git record would reject floating targets. */
+  async resolveManagedTerminalWorkspaceTarget(
+    worktreeSelector: string,
+    requiredHostId?: ExecutionHostId,
+    checkPath = true
+  ) {
+    const key = worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
+    const scope = parseWorkspaceKey(key)
+    const folder =
+      scope?.type === 'folder'
+        ? this.resolveFolderWorkspaceSelector(worktreeSelector, requiredHostId)
+        : undefined
+    const resolved =
+      requiredHostId && scope?.type !== 'folder'
+        ? await this.showManagedWorktree(worktreeSelector, requiredHostId)
+        : undefined
+    return this.resolveTerminalWorkspaceLaunchTarget(
+      worktreeSelector,
+      undefined,
+      {},
+      resolved,
+      folder ?? undefined,
+      checkPath
+    )
+  }
+
+  /**
+   * Where a terminal workspace is, for every kind one can be: a git worktree, a folder workspace,
+   * or the floating sentinel. This is the general answer — `id` and `path` are resolved the same
+   * way for all three — so a caller that reads only those must ask for this rather than demand a
+   * worktree record it never reads and lose the floating workspace to a `selector_not_found`.
+   */
   async showTerminalWorkspaceLaunchScope(
     worktreeSelector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -183,51 +227,13 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     return scope
   }
 
-  async startManagedWorkspaceServer(args: {
-    worktree: string
-    executionHostId: string
-    port: number
-    name: string
-    command: string
-    cwd: string
-  }) {
-    const permit = this.workspaceServers.beginStart()
-    try {
-      const scope = await this.resolveWorkspaceServerScope(args.worktree, args.executionHostId)
-      const prepared = await prepareWorkspaceServerCommand({
-        rootPath: scope.path,
-        cwd: args.cwd,
-        command: args.command,
-        settings: this.store?.getSettings()
-      })
-      const scan = await this.scanWorkspacePorts()
-      if (scan.unavailableReason) {
-        throw new Error(scan.unavailableReason)
-      }
-      if (scan.ports.some((port) => port.port === args.port)) {
-        throw new Error(`Port ${args.port} is already in use.`)
-      }
-      const confirmedScope = await this.resolveWorkspaceServerScope(
-        args.worktree,
-        args.executionHostId
-      )
-      if ((await realpath(confirmedScope.path)) !== prepared.root) {
-        throw new Error('The workspace changed while starting the server.')
-      }
-      // The path gate also covers accepted background Git removals. No await before spawn.
-      const releaseInstall = beginTerminalInstall(prepared.root)
-      try {
-        return this.workspaceServers.start(
-          { worktreeId: scope.id, port: args.port, name: args.name },
-          prepared.spec,
-          permit
-        )
-      } finally {
-        releaseInstall()
-      }
-    } finally {
-      permit.release()
-    }
+  async startManagedWorkspaceServer(args: ManagedWorkspaceServerStart) {
+    return launchManagedWorkspaceServer(args, {
+      servers: this.workspaceServers,
+      resolveScope: () => this.resolveWorkspaceServerScope(args.worktree, args.executionHostId),
+      scanPorts: () => this.scanWorkspacePorts(),
+      getSettings: () => this.store?.getSettings()
+    })
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {
@@ -314,7 +320,7 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     worktreeSelector: string,
     opts: { replyOnAcceptance?: boolean; markChatsAsleep?: boolean } = {}
   ): Promise<{ worktreeId: string } & Partial<WorkspaceSleepOutcome>> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     return this.workspaceSleep.sleepOwnWorktree(worktree.id, opts)
   }
 
@@ -326,8 +332,8 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */
-  resumeSleptPane(pane: RestoredPane): Promise<boolean> {
-    return this.workspaceSleep.resumePane(pane)
+  resumeSleptPane(pane: RestoredPane, automatic?: boolean): Promise<boolean> {
+    return this.workspaceSleep.resumePane(pane, automatic)
   }
 
   /** The window reopened a slept agent whose tab is gone in a fresh tab; this record is spent. */
